@@ -1,0 +1,159 @@
+---
+title: "reproducible_research_assgn1"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+# Quantified Self
+## Monitoring the number of steps for an individual in the months of October and November, 2012
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This document will delve into the activity.csv dataset and will cover;  
+
+1. Reading in the data
+2. Histogram of the total number of steps taken each day
+3. Mean and median number of steps taken each day
+4. Time series plot of the average number of steps taken        
+5. The 5-minute interval that, on average, contains the maximum number of steps
+6. Code to describe and show a strategy for imputing missing data
+7. Histogram of the total number of steps taken each day after missing values are imputed
+8. Panel plot comparing the average number of steps taken per 5 minute interval across weekdays and weekends
+
+I will address each one by one.
+
+### 1. Reading in the Data
+
+
+```{r}
+setwd("C:/Users/eo6405/Desktop/Misc - R/Coursera/Reproducible Research/Assignment 1")
+
+library(readr)
+activity <- read.csv("repdata%2Fdata%2Factivity/activity.csv")
+summary(activity)
+```
+
+
+### 2. Histogram of the total number of steps taken each day
+
+```{r}
+library(ggplot2)
+
+ggplot(activity, aes(date, steps, group = 1)) + 
+        stat_summary(geom = "bar", fun.y = "sum", fill = "lightblue") + 
+        labs(x = "Date", y = "Total number of Steps", title = "Total Steps per Day") +
+        theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+### 3. Mean and Median Steps per Day
+
+```{r}
+library(dplyr)
+
+activity %>% 
+        group_by(date) %>%
+        summarise(median(steps), mean(steps)) -> activity_by_day
+
+names(activity_by_day) <- c("Date", "Median", "Mean")
+
+activity_by_day
+
+```
+
+Now plotting this...
+```{r}
+ggplot(activity, aes(date, steps, group = 1)) +
+        stat_summary(aes(date, steps, color = "Mean"), geom = 'line', fun.y = "mean") +
+        stat_summary(aes(date, steps, color = "Median"), geom = 'line', fun.y = "median") +
+        theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+        labs(x = "Date", y = "", title = "Mean and Median Steps") +
+        scale_color_manual(name = "", values = c(Mean = "blue", Median = "red"))
+```
+
+
+Note that the median for each day appears to be 0.
+
+### 4. Timeseries plot of average number of steps taken
+```{r}
+ggplot(activity, aes(interval, steps, group = 1)) +
+        stat_summary(aes(interval, steps), geom = 'line', fun.y = "mean", color = "blue") +
+        theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+        labs(x = "Interval", y = "Steps", title = "Time Series : Avg Steps")
+```
+
+### 5. 5 Minute interval that contains largest number of Steps
+
+
+```{r}
+activity_complete <- activity[complete.cases(activity),]
+
+activity_complete %>%
+        group_by(interval) %>%
+        summarise(Avg = mean(steps)) %>%
+        arrange(desc(Avg)) -> steps_by_interval
+
+head(steps_by_interval)
+
+```
+
+Interval 835 has the highest steps on average.
+
+### 6. Strategy for imputing data
+
+Methodology in imputing missing data is that, for that specific interval, take the interval average. I create an 'Impute Mean' function which I then apply, by level in Interval, to Steps. This has been saved in 'activity_imputed.'
+
+```{r}
+
+impute.mean <- function(x) replace(x, is.na(x), mean(x, na.rm = TRUE))
+activity %>%
+        group_by(interval) %>%
+        mutate(steps = impute.mean(steps)) -> activity_imputed
+
+```
+
+
+### 7. Histogram of total number of steps taken each day, with imputations.
+
+This will be the same plot as in 2.
+
+```{r}
+ggplot(activity_imputed, aes(date, steps, group = 1)) + 
+        stat_summary(geom = "bar", fun.y = "sum", fill = "lightblue") + 
+        labs(x = "Date", y = "Total number of Steps", title = "Total Steps per Day - All Data") +
+        theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+
+### 8. Panel plot comparing the average number of steps taken per 5 minute interval across weekdays and weekends
+
+To do this, I;
+
+1. Create a variable which pulls the day of the week out
+2. Create a vector which names all 'weekdays'
+3. Create a factor where, if the weekday falls within 'weekdays', it is named a 'weekday.' If not, it is a 'weekend.'
+4. Plot on two separate axes
+
+```{r}
+activity_imputed$day <- weekdays(as.Date(activity_imputed$date))
+
+weekday <- c('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday')
+
+activity_imputed$weekday <- factor((activity_imputed$day) %in% weekday, 
+                   levels=c(FALSE, TRUE), labels=c('weekend', 'weekday'))
+
+ggplot(activity_imputed, aes(interval, steps)) +
+        stat_summary(geom = "bar", fun.y = "mean", color = "red") +
+        facet_grid(weekday~.) +
+        labs(x = "Date", y = "Total Number of Steps", title = "Steps - Weekend vs Weekday") +
+        geom_smooth(se = FALSE, size = 1, color = "black") +
+        theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+
+This concludes my assignment.
+
+
+
